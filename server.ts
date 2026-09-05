@@ -77,12 +77,48 @@ app.get('/api/events/:id', (req, res) => {
   res.json(event);
 });
 
-// POST create a new event
-app.post('/api/events', (req, res) => {
-  const { title, eventType, date, time, location, description, adminPin } = req.body;
-  if (!title || !date) {
-    return res.status(400).json({ error: 'El título y la fecha son obligatorios' });
+// POST sync multiple events (from client to server)
+app.post('/api/events/sync', (req, res) => {
+  const incomingEvents: EventData[] = req.body.events;
+  if (!Array.isArray(incomingEvents)) {
+    return res.status(400).json({ error: 'Formato inválido: se esperaba un arreglo de eventos' });
   }
+
+  let addedOrUpdated = 0;
+  for (const inc of incomingEvents) {
+    if (!inc || !inc.id) continue;
+    const existingIndex = eventsStore.findIndex(e => e.id === inc.id || e.id.toLowerCase() === inc.id.toLowerCase());
+    if (existingIndex !== -1) {
+      // Merge families and tables if incoming has more
+      eventsStore[existingIndex] = {
+        ...eventsStore[existingIndex],
+        ...inc,
+        id: eventsStore[existingIndex].id,
+        tables: (inc.tables && inc.tables.length > 0) ? inc.tables : eventsStore[existingIndex].tables,
+        families: (inc.families && inc.families.length > 0) ? inc.families : eventsStore[existingIndex].families,
+      };
+      addedOrUpdated++;
+    } else {
+      eventsStore.unshift(inc);
+      addedOrUpdated++;
+    }
+  }
+
+  if (addedOrUpdated > 0) {
+    saveEventsToDisk();
+  }
+
+  res.json({ success: true, count: eventsStore.length, events: eventsStore });
+});
+
+// POST create or upsert an event
+app.post('/api/events', (req, res) => {
+  const { title, eventType, date, time, location, description, adminPin, id, tables, families, decorElements } = req.body;
+  if (!title) {
+    return res.status(400).json({ error: 'El título es obligatorio' });
+  }
+
+  const effectiveDate = date || new Date().toISOString().split('T')[0];
 
   const slug = title
     .toLowerCase()
@@ -91,24 +127,46 @@ app.post('/api/events', (req, res) => {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '') || `evento-${Date.now()}`;
 
-  // Unique ID check
-  let finalId = slug;
-  let counter = 1;
-  while (eventsStore.some(e => e.id === finalId)) {
-    finalId = `${slug}-${counter++}`;
+  let finalId = id ? String(id).trim() : '';
+  if (!finalId) {
+    finalId = slug;
+    let counter = 1;
+    while (eventsStore.some(e => e.id === finalId)) {
+      finalId = `${slug}-${counter++}`;
+    }
+  }
+
+  // Check if event already exists with this ID -> update it
+  const existingIndex = eventsStore.findIndex(e => e.id === finalId || e.id.toLowerCase() === finalId.toLowerCase());
+  if (existingIndex !== -1) {
+    eventsStore[existingIndex] = {
+      ...eventsStore[existingIndex],
+      title: title || eventsStore[existingIndex].title,
+      eventType: eventType || eventsStore[existingIndex].eventType,
+      date: effectiveDate || eventsStore[existingIndex].date,
+      time: time || eventsStore[existingIndex].time,
+      location: location !== undefined ? location : eventsStore[existingIndex].location,
+      description: description !== undefined ? description : eventsStore[existingIndex].description,
+      adminPin: adminPin || eventsStore[existingIndex].adminPin,
+      tables: tables && tables.length ? tables : eventsStore[existingIndex].tables,
+      families: families && families.length ? families : eventsStore[existingIndex].families,
+      decorElements: decorElements && decorElements.length ? decorElements : eventsStore[existingIndex].decorElements,
+    };
+    saveEventsToDisk();
+    return res.status(200).json(eventsStore[existingIndex]);
   }
 
   const newEvent: EventData = {
     id: finalId,
     title,
     eventType: eventType || 'other',
-    date,
+    date: effectiveDate,
     time: time || '19:00',
     location: location || 'Salón Principal',
     description: description || '',
     adminPin: adminPin || 'termine12.nx',
     createdAt: new Date().toISOString(),
-    tables: [
+    tables: (tables && tables.length > 0) ? tables : [
       {
         id: `tbl-${Date.now()}-1`,
         eventId: finalId,
@@ -130,8 +188,8 @@ app.post('/api/events', (req, res) => {
         color: '#3b82f6',
       }
     ],
-    families: [],
-    decorElements: [
+    families: Array.isArray(families) ? families : [],
+    decorElements: (decorElements && decorElements.length > 0) ? decorElements : [
       {
         id: `decor-${Date.now()}-stage`,
         type: 'stage',

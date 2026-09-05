@@ -3,19 +3,34 @@ import { INITIAL_EVENTS } from '../data/initialData';
 
 const LOCAL_STORAGE_KEY = 'eventmaster_events_data_v2';
 
-// Clean legacy demo data if present
-try {
-  localStorage.removeItem('eventmaster_events_data_v1');
-} catch (_) {}
-
-// Local storage helpers
+// Local storage helpers with fallback to legacy v1 if v2 is empty
 function getLocalEvents(): EventData[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
   } catch (e) {
-    console.error('Error reading localStorage events:', e);
+    console.error('Error reading localStorage v2:', e);
   }
+
+  // Check legacy v1 if present
+  try {
+    const rawV1 = localStorage.getItem('eventmaster_events_data_v1');
+    if (rawV1) {
+      const parsedV1 = JSON.parse(rawV1);
+      if (Array.isArray(parsedV1) && parsedV1.length > 0) {
+        // Exclude old hardcoded demo if desired, or keep real user events
+        const userEvents = parsedV1.filter((e: any) => e.id !== 'boda-valeria-santiago');
+        if (userEvents.length > 0) {
+          saveLocalEvents(userEvents);
+          return userEvents;
+        }
+      }
+    }
+  } catch (_) {}
+
   return INITIAL_EVENTS;
 }
 
@@ -28,36 +43,82 @@ function saveLocalEvents(events: EventData[]) {
 }
 
 export const api = {
-  // Fetch all events
+  // Fetch all events with automatic bidirectional sync
   async getEvents(): Promise<EventData[]> {
+    const local = getLocalEvents();
+
     try {
       const res = await fetch('/api/events');
       if (res.ok) {
-        const data = await res.json();
-        // also get full events or update
-        return data;
+        const serverEvents: EventData[] = await res.json();
+        
+        // Find any local events that are not yet on the server
+        const missingOnServer = local.filter(
+          le => !serverEvents.some(se => se.id === le.id || se.id.toLowerCase() === le.id.toLowerCase())
+        );
+
+        if (missingOnServer.length > 0) {
+          try {
+            const syncRes = await fetch('/api/events/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ events: missingOnServer }),
+            });
+            if (syncRes.ok) {
+              const syncData = await syncRes.json();
+              if (syncData.events) {
+                saveLocalEvents(syncData.events);
+                return syncData.events;
+              }
+            }
+          } catch (syncErr) {
+            console.warn('Sync to server failed:', syncErr);
+          }
+        }
+
+        saveLocalEvents(serverEvents);
+        return serverEvents;
       }
     } catch (err) {
       console.warn('Backend API fetch failed, falling back to local state:', err);
     }
-    return getLocalEvents();
+    return local;
   },
 
-  // Fetch single event by ID
+  // Fetch single event by ID (case-insensitive & URI-decoded matching)
   async getEvent(id: string): Promise<EventData | null> {
+    if (!id) return null;
+    const cleanId = id.trim();
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(id)}`);
+      const res = await fetch(`/api/events/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
-        return await res.json();
+        const ev = await res.json();
+        // Update local cache
+        const local = getLocalEvents();
+        const idx = local.findIndex(e => e.id === ev.id);
+        if (idx !== -1) {
+          local[idx] = ev;
+        } else {
+          local.push(ev);
+        }
+        saveLocalEvents(local);
+        return ev;
       }
     } catch (err) {
-      console.warn('Backend API single event fetch failed, fallback:', err);
+      console.warn('Backend API single event fetch failed, checking local:', err);
     }
+
     const events = getLocalEvents();
-    return events.find(e => e.id === id) || null;
+    const lower = cleanId.toLowerCase();
+    const decoded = decodeURIComponent(cleanId).toLowerCase();
+    return events.find(e => 
+      e.id === cleanId || 
+      e.id.toLowerCase() === lower || 
+      decodeURIComponent(e.id).toLowerCase() === decoded
+    ) || null;
   },
 
-  // Create new event
+  // Create new event (persisting to server immediately)
   async createEvent(eventData: Partial<EventData>): Promise<EventData> {
     try {
       const res = await fetch('/api/events', {
@@ -66,14 +127,19 @@ export const api = {
         body: JSON.stringify(eventData),
       });
       if (res.ok) {
-        const created = await res.json();
+        const created: EventData = await res.json();
         const local = getLocalEvents();
-        local.unshift(created);
+        const existingIdx = local.findIndex(e => e.id === created.id);
+        if (existingIdx !== -1) {
+          local[existingIdx] = created;
+        } else {
+          local.unshift(created);
+        }
         saveLocalEvents(local);
         return created;
       }
     } catch (err) {
-      console.warn('Backend API create failed, using local storage:', err);
+      console.warn('Backend API create failed, using local storage fallback:', err);
     }
 
     // Local fallback
@@ -129,8 +195,17 @@ export const api = {
         }
       ]
     };
+
     local.unshift(newEvent);
     saveLocalEvents(local);
+
+    // Try background sync to server
+    fetch('/api/events/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: [newEvent] }),
+    }).catch(() => {});
+
     return newEvent;
   },
 

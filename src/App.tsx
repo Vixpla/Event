@@ -22,17 +22,30 @@ export default function App() {
   });
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Sync URL query params with view state
-  const parseViewFromUrl = useCallback((eventsList: EventData[]): AppView => {
-    const params = new URLSearchParams(window.location.search);
-    const viewParam = params.get('view');
-    const eventIdParam = params.get('eventId');
+  // Sync URL query params or hash params with view state
+  const parseViewFromUrl = useCallback((): AppView => {
+    // 1. Check window.location.search
+    let params = new URLSearchParams(window.location.search);
+    let viewParam = params.get('view');
+    let eventIdParam = params.get('eventId');
+
+    // 2. Fallback: Check window.location.hash if not in search
+    if (!viewParam && window.location.hash) {
+      const hashStr = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+      const queryIdx = hashStr.indexOf('?');
+      const hashQuery = queryIdx !== -1 ? hashStr.slice(queryIdx) : hashStr;
+      const hashParams = new URLSearchParams(hashQuery);
+      viewParam = hashParams.get('view') || viewParam;
+      eventIdParam = hashParams.get('eventId') || eventIdParam;
+    }
 
     if (viewParam === 'register' && eventIdParam) {
-      return { type: 'guest_register', eventId: eventIdParam };
+      return { type: 'guest_register', eventId: decodeURIComponent(eventIdParam).trim() };
     }
     if (viewParam === 'seating' && eventIdParam) {
-      return { type: 'table_organizer', eventId: eventIdParam };
+      return { type: 'table_organizer', eventId: decodeURIComponent(eventIdParam).trim() };
     }
     return { type: 'admin_dashboard' };
   }, []);
@@ -64,18 +77,37 @@ export default function App() {
   const loadEvents = async () => {
     setIsLoading(true);
     try {
-      const data = await api.getEvents();
-      setEvents(data);
-
-      // Check current URL view
-      const parsedView = parseViewFromUrl(data);
+      // Parse desired view from URL immediately
+      const parsedView = parseViewFromUrl();
       setCurrentView(parsedView);
 
+      let data = await api.getEvents();
+
+      // If the URL specifies a particular eventId, ensure we have it loaded
       if ('eventId' in parsedView && parsedView.eventId) {
-        setSelectedEventId(parsedView.eventId);
+        const targetId = parsedView.eventId;
+        const lowerTarget = targetId.toLowerCase();
+        const found = data.some(
+          e => e.id === targetId || 
+               e.id.toLowerCase() === lowerTarget || 
+               decodeURIComponent(e.id).toLowerCase() === lowerTarget
+        );
+        if (!found) {
+          try {
+            const single = await api.getEvent(targetId);
+            if (single) {
+              data = [single, ...data];
+            }
+          } catch (e) {
+            console.warn('Could not fetch specific event:', e);
+          }
+        }
+        setSelectedEventId(targetId);
       } else if (data.length > 0) {
         setSelectedEventId(data[0].id);
       }
+
+      setEvents(data);
     } catch (err) {
       console.error('Error loading events:', err);
     } finally {
@@ -87,7 +119,7 @@ export default function App() {
     loadEvents();
 
     const handlePopState = () => {
-      const parsed = parseViewFromUrl(events);
+      const parsed = parseViewFromUrl();
       setCurrentView(parsed);
       if ('eventId' in parsed && parsed.eventId) {
         setSelectedEventId(parsed.eventId);
@@ -271,7 +303,19 @@ export default function App() {
 
   // Find currently active event object
   const activeEventId = ('eventId' in currentView && currentView.eventId) ? currentView.eventId : selectedEventId;
-  const activeEvent = events.find(e => e.id === activeEventId) || events[0] || null;
+  const activeEvent = (() => {
+    if (!activeEventId) return events[0] || null;
+    const clean = activeEventId.trim();
+    const lower = clean.toLowerCase();
+    const decoded = decodeURIComponent(clean).toLowerCase();
+    return (
+      events.find(e => e.id === clean) ||
+      events.find(e => e.id.toLowerCase() === lower) ||
+      events.find(e => decodeURIComponent(e.id).toLowerCase() === decoded) ||
+      events[0] ||
+      null
+    );
+  })();
 
   if (isLoading) {
     return (
@@ -334,15 +378,26 @@ export default function App() {
           />
         )}
 
-        {currentView.type === 'table_organizer' && activeEvent && (
-          <TableSeatingOrganizer
-            event={activeEvent}
-            onAssignTable={handleAssignTable}
-            onUnassignTable={handleUnassignTable}
-            onAddTable={handleAddTable}
-            onUpdateTable={handleUpdateTable}
-            onDeleteTable={handleDeleteTable}
-          />
+        {currentView.type === 'table_organizer' && (
+          activeEvent ? (
+            <TableSeatingOrganizer
+              event={activeEvent}
+              onAssignTable={handleAssignTable}
+              onUnassignTable={handleUnassignTable}
+              onAddTable={handleAddTable}
+              onUpdateTable={handleUpdateTable}
+              onDeleteTable={handleDeleteTable}
+            />
+          ) : (
+            <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
+              <div className="max-w-md w-full text-center bg-slate-800/80 p-8 rounded-2xl border border-slate-700 shadow-xl">
+                <h2 className="text-xl font-bold font-serif">Evento no encontrado</h2>
+                <p className="text-xs text-slate-400 mt-2">
+                  El enlace de asignación de mesas no corresponde a un evento activo.
+                </p>
+              </div>
+            </div>
+          )
         )}
       </main>
 
