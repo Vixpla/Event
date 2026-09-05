@@ -1,0 +1,6 @@
+{
+  "name": "EventMaster Pro - Gestión de Eventos y Mesas",
+  "description": "Plataforma integral de gestión de eventos, registro de invitados y distribución interactiva de mesas con drag and drop y exportación a PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
