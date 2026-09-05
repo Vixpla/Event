@@ -100,8 +100,9 @@ export default function App() {
 
   // Admin authentication handlers
   const handleAdminAuthenticate = (pin: string): boolean => {
-    // Master admin pin or event-specific pin
-    const valid = pin === '1234' || events.some(e => e.adminPin === pin);
+    // Master admin password or event-specific pin
+    const trimmed = pin.trim();
+    const valid = trimmed === 'termine12.nx' || events.some(e => e.adminPin === trimmed);
     if (valid) {
       setIsAdminAuthenticated(true);
       localStorage.setItem('eventmaster_admin_auth', 'true');
@@ -147,18 +148,22 @@ export default function App() {
     phone?: string;
     email?: string;
   }): Promise<{ message: string; family: FamilyGuest }> => {
-    if (!activeEvent) {
+    const targetEventId = ('eventId' in currentView && currentView.eventId) 
+      ? currentView.eventId 
+      : activeEvent?.id;
+
+    if (!targetEventId) {
       throw new Error('No hay evento activo seleccionado');
     }
 
-    const result = await api.registerFamily(activeEvent.id, formData);
+    const result = await api.registerFamily(targetEventId, formData);
     
     // Update local state for the active event
     setEvents(prev => prev.map(ev => {
-      if (ev.id === activeEvent.id) {
+      if (ev.id === targetEventId) {
         return {
           ...ev,
-          families: [...ev.families, result.family],
+          families: [...(ev.families || []), result.family],
         };
       }
       return ev;
@@ -282,14 +287,16 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
       
-      {/* GLOBAL NAVBAR */}
-      <Navbar
-        currentView={currentView}
-        onNavigate={handleNavigate}
-        activeEvent={activeEvent}
-        isAdminAuthenticated={isAdminAuthenticated}
-        onAdminLogout={handleAdminLogout}
-      />
+      {/* NAVBAR: Solamente visible en el Panel de Administración */}
+      {currentView.type === 'admin_dashboard' && (
+        <Navbar
+          currentView={currentView}
+          onNavigate={handleNavigate}
+          activeEvent={activeEvent}
+          isAdminAuthenticated={isAdminAuthenticated}
+          onAdminLogout={handleAdminLogout}
+        />
+      )}
 
       {/* TOAST NOTIFICATION */}
       {toastMessage && (
@@ -324,7 +331,6 @@ export default function App() {
           <GuestRegisterForm
             event={activeEvent}
             onSubmitRegistration={handleGuestRegistration}
-            onBackToAdmin={() => handleNavigate({ type: 'admin_dashboard' })}
           />
         )}
 
@@ -336,8 +342,6 @@ export default function App() {
             onAddTable={handleAddTable}
             onUpdateTable={handleUpdateTable}
             onDeleteTable={handleDeleteTable}
-            onBackToAdmin={() => handleNavigate({ type: 'admin_dashboard' })}
-            onNavigateToRegister={() => handleNavigate({ type: 'guest_register', eventId: activeEvent.id })}
           />
         )}
       </main>

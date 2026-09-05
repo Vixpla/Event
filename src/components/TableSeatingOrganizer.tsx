@@ -14,8 +14,8 @@ interface TableSeatingOrganizerProps {
   onAddTable: (data: Partial<EventTable>) => Promise<void>;
   onUpdateTable: (tableId: string, updates: Partial<EventTable>) => Promise<void>;
   onDeleteTable: (tableId: string) => Promise<void>;
-  onBackToAdmin: () => void;
-  onNavigateToRegister: () => void;
+  onBackToAdmin?: () => void;
+  onNavigateToRegister?: () => void;
 }
 
 export const TableSeatingOrganizer: React.FC<TableSeatingOrganizerProps> = ({
@@ -246,20 +246,13 @@ export const TableSeatingOrganizer: React.FC<TableSeatingOrganizerProps> = ({
   const selectedTableData = selectedTable ? getTableOccupancy(selectedTable.id) : null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-100 overflow-hidden select-none">
+    <div className="flex flex-col h-screen bg-slate-100 overflow-hidden select-none">
       
       {/* TOP SUB-HEADER & TOOLBAR */}
       <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between gap-4 z-20 shrink-0">
         
-        {/* Left: Event Info & Back button */}
+        {/* Left: Event Info */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBackToAdmin}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-            title="Volver al panel admin"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-slate-900 leading-none">{event.title}</span>
@@ -653,12 +646,14 @@ export const TableSeatingOrganizer: React.FC<TableSeatingOrganizerProps> = ({
                     ? '¡Excelente! No hay familias pendientes de asignar mesa.'
                     : 'No se encontraron registros con este filtro.'}
                 </p>
-                <button
-                  onClick={onNavigateToRegister}
-                  className="mt-3 text-xs text-indigo-600 font-semibold hover:underline"
-                >
-                  Registrar nueva familia
-                </button>
+                {onNavigateToRegister && (
+                  <button
+                    onClick={onNavigateToRegister}
+                    className="mt-3 text-xs text-indigo-600 font-semibold hover:underline"
+                  >
+                    Registrar nueva familia
+                  </button>
+                )}
               </div>
             ) : (
               filteredFamilies.map((family) => {

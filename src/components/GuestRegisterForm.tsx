@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { 
-  Users, Calendar, MapPin, Clock, CheckCircle2, AlertCircle, Sparkles, 
-  ArrowLeft, Heart, Send, Plus, Minus, UserCheck, ShieldAlert
+  Users, Calendar, MapPin, Clock, CheckCircle2, AlertCircle, 
+  Send, Plus, Minus, ShieldAlert
 } from 'lucide-react';
 import { EventData, FamilyGuest } from '../types';
 
@@ -17,24 +17,16 @@ interface GuestRegisterFormProps {
     phone?: string;
     email?: string;
   }) => Promise<{ message: string; family: FamilyGuest }>;
-  onBackToAdmin?: () => void;
 }
 
 export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
   event,
   onSubmitRegistration,
-  onBackToAdmin,
 }) => {
-  // Required fields
+  // Required fields according to specification
   const [firstLastName, setFirstLastName] = useState('');
   const [secondLastName, setSecondLastName] = useState('');
   const [memberCount, setMemberCount] = useState<number>(2);
-
-  // Optional/complementary fields
-  const [contactName, setContactName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [notes, setNotes] = useState('');
 
   // Form states
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,21 +35,13 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
 
   if (!event) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-slate-900 text-white">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900 text-white">
         <div className="max-w-md w-full text-center bg-slate-800/80 p-8 rounded-2xl border border-slate-700 shadow-xl">
           <ShieldAlert className="w-12 h-12 text-rose-400 mx-auto mb-3" />
           <h2 className="text-xl font-bold font-serif">Evento no encontrado</h2>
           <p className="text-xs text-slate-400 mt-2">
-            El enlace de registro no es válido o el evento ha concluido.
+            El enlace de registro no es válido, el evento ha concluido o no existe en el sistema.
           </p>
-          {onBackToAdmin && (
-            <button
-              onClick={onBackToAdmin}
-              className="mt-6 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl"
-            >
-              Volver al Panel Principal
-            </button>
-          )}
         </div>
       </div>
     );
@@ -86,15 +70,15 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
         firstLastName: firstLastName.trim(),
         secondLastName: secondLastName.trim(),
         memberCount,
-        contactName: contactName.trim() || `${firstLastName.trim()} ${secondLastName.trim()}`,
-        phone: phone.trim(),
-        email: email.trim(),
-        notes: notes.trim(),
+        contactName: `${firstLastName.trim()} ${secondLastName.trim()}`,
+        phone: '',
+        email: '',
+        notes: '',
       });
 
       setSubmittedFamily(result.family);
 
-      // Trigger Confetti
+      // Trigger Celebration Confetti
       try {
         confetti({
           particleCount: 80,
@@ -116,30 +100,13 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
     setFirstLastName('');
     setSecondLastName('');
     setMemberCount(2);
-    setContactName('');
-    setPhone('');
-    setEmail('');
-    setNotes('');
     setSubmittedFamily(null);
     setErrorMessage('');
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-900 via-slate-800 to-indigo-950 py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl mx-auto">
-
-        {/* Back navigation button if admin */}
-        {onBackToAdmin && (
-          <div className="mb-4">
-            <button
-              onClick={onBackToAdmin}
-              className="inline-flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-lg border border-white/10"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Regresar al Panel de Control</span>
-            </button>
-          </div>
-        )}
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-indigo-950 py-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+      <div className="max-w-2xl w-full mx-auto">
 
         {/* SUCCESS CONFIRMATION SCREEN */}
         {submittedFamily ? (
@@ -151,7 +118,7 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
               <CheckCircle2 className="w-8 h-8" />
             </div>
 
-            <span className="px-3 py-1 bg-amber-100 text-amber-900 text-xs font-bold rounded-full uppercase tracking-wider">
+            <span className="px-3.5 py-1 bg-amber-100 text-amber-900 text-xs font-bold rounded-full uppercase tracking-wider">
               Estado: Pendiente de asignación de mesa
             </span>
 
@@ -194,7 +161,7 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
             </div>
 
             <p className="text-xs text-slate-500 mb-6 italic">
-              El equipo organizador distribuirá las mesas y te informará a tu llegada o confirmación.
+              El equipo organizador distribuirá las mesas y te informará a tu llegada.
             </p>
 
             <button
@@ -261,7 +228,7 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
               {/* REQUIRED FIELDS SECTION */}
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Datos Requeridos de la Familia
+                  Datos de la Familia
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -310,7 +277,7 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
                         Número Total de Integrantes / Personas Asistiendo *
                       </label>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Incluye adultos y niños que requerirán una silla en la mesa.
+                        Incluye todas las personas que requerirán una silla en la mesa.
                       </p>
                     </div>
 
@@ -345,54 +312,6 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
 
               </div>
 
-              {/* OPTIONAL COMPLEMENTARY FIELDS */}
-              <div className="space-y-4 pt-3 border-t border-slate-100">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Información de Contacto & Observaciones (Opcional)
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Nombre del Titular o Representante
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="ej. Carlos González"
-                      value={contactName}
-                      onChange={(e) => setContactName(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Teléfono / WhatsApp
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="+52 55 1234 5678"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-900"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Dietas especiales, alergias o requerimientos (ej. Silla alta para bebé, vegetariano...)
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="Escribe aquí si algún miembro tiene alguna dieta o restricción..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-900"
-                  />
-                </div>
-              </div>
-
               {/* ERROR MESSAGE */}
               {errorMessage && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
@@ -417,10 +336,6 @@ export const GuestRegisterForm: React.FC<GuestRegisterFormProps> = ({
                   </>
                 )}
               </button>
-
-              <p className="text-[11px] text-center text-slate-500">
-                Los datos quedan protegidos y vinculados únicamente a <strong className="text-slate-700">{event.title}</strong>.
-              </p>
 
             </form>
 

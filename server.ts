@@ -1,16 +1,58 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { INITIAL_EVENTS } from './src/data/initialData';
-import { EventData, FamilyGuest, EventTable, DecorElement } from './src/types';
+import { EventData, FamilyGuest, EventTable } from './src/types';
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-// In-memory data store initialized with default events
-let eventsStore: EventData[] = JSON.parse(JSON.stringify(INITIAL_EVENTS));
+// Disk persistence helper
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_FILE = path.join(DATA_DIR, 'events.json');
+
+function loadEventsFromDisk(): EventData[] {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const content = fs.readFileSync(DATA_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error loading events from disk:', err);
+  }
+  return [];
+}
+
+function saveEventsToDisk() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(eventsStore, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving events to disk:', err);
+  }
+}
+
+// In-memory data store initialized from disk (or empty array)
+let eventsStore: EventData[] = loadEventsFromDisk();
+
+// Helper to find event by ID or decoded ID
+function findEvent(id: string): EventData | undefined {
+  if (!id) return undefined;
+  const decoded = decodeURIComponent(id);
+  return eventsStore.find(e => 
+    e.id === id || 
+    e.id === decoded || 
+    e.id.toLowerCase() === id.toLowerCase() ||
+    e.id.toLowerCase() === decoded.toLowerCase()
+  );
+}
 
 // ==========================================
 // API ROUTES
@@ -21,43 +63,14 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), eventsCount: eventsStore.length });
 });
 
-// GET all events (Summary for Admin selector)
+// GET all events (Returns full events with tables and families)
 app.get('/api/events', (req, res) => {
-  const summaries = eventsStore.map(ev => {
-    const totalGuests = ev.families.reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0);
-    const assignedGuests = ev.families
-      .filter(f => f.status === 'assigned' && f.assignedTableId)
-      .reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0);
-    const totalCapacity = ev.tables.reduce((acc, t) => acc + (Number(t.capacity) || 0), 0);
-    const pendingGuests = totalGuests - assignedGuests;
-
-    return {
-      id: ev.id,
-      title: ev.title,
-      eventType: ev.eventType,
-      date: ev.date,
-      time: ev.time,
-      location: ev.location,
-      description: ev.description,
-      adminPin: ev.adminPin,
-      createdAt: ev.createdAt,
-      stats: {
-        totalFamilies: ev.families.length,
-        totalGuests,
-        assignedGuests,
-        pendingGuests,
-        totalTables: ev.tables.length,
-        totalCapacity,
-        occupancyRate: totalCapacity > 0 ? Math.min(100, Math.round((assignedGuests / totalCapacity) * 100)) : 0,
-      }
-    };
-  });
-  res.json(summaries);
+  res.json(eventsStore);
 });
 
 // GET single event with full tables and families
 app.get('/api/events/:id', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) {
     return res.status(404).json({ error: 'Evento no encontrado' });
   }
@@ -93,7 +106,7 @@ app.post('/api/events', (req, res) => {
     time: time || '19:00',
     location: location || 'Salón Principal',
     description: description || '',
-    adminPin: adminPin || '1234',
+    adminPin: adminPin || 'termine12.nx',
     createdAt: new Date().toISOString(),
     tables: [
       {
@@ -141,16 +154,18 @@ app.post('/api/events', (req, res) => {
   };
 
   eventsStore.unshift(newEvent);
+  saveEventsToDisk();
   res.status(201).json(newEvent);
 });
 
 // PUT update event details
 app.put('/api/events/:id', (req, res) => {
-  const eventIndex = eventsStore.findIndex(e => e.id === req.params.id);
-  if (eventIndex === -1) {
+  const event = findEvent(req.params.id);
+  if (!event) {
     return res.status(404).json({ error: 'Evento no encontrado' });
   }
 
+  const eventIndex = eventsStore.findIndex(e => e.id === event.id);
   const updated = {
     ...eventsStore[eventIndex],
     ...req.body,
@@ -158,16 +173,20 @@ app.put('/api/events/:id', (req, res) => {
   };
 
   eventsStore[eventIndex] = updated;
+  saveEventsToDisk();
   res.json(updated);
 });
 
 // DELETE event
 app.delete('/api/events/:id', (req, res) => {
   const initialLength = eventsStore.length;
-  eventsStore = eventsStore.filter(e => e.id !== req.params.id);
-  if (eventsStore.length === initialLength) {
+  const event = findEvent(req.params.id);
+  if (!event) {
     return res.status(404).json({ error: 'Evento no encontrado' });
   }
+
+  eventsStore = eventsStore.filter(e => e.id !== event.id);
+  saveEventsToDisk();
   res.json({ message: 'Evento eliminado con éxito' });
 });
 
@@ -175,7 +194,7 @@ app.delete('/api/events/:id', (req, res) => {
 // Requirements: strictly linked to eventId, fields: firstLastName, secondLastName, memberCount
 // Status saved as: 'pending' (Pendiente de asignación de mesa)
 app.post('/api/events/:id/families', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) {
     return res.status(404).json({ error: 'El evento especificado no existe o ha expirado' });
   }
@@ -191,6 +210,10 @@ app.post('/api/events/:id/families', (req, res) => {
   const count = Number(memberCount);
   if (!count || count < 1) {
     return res.status(400).json({ error: 'El número total de integrantes debe ser al menos 1' });
+  }
+
+  if (!event.families) {
+    event.families = [];
   }
 
   const newFamily: FamilyGuest = {
@@ -209,6 +232,8 @@ app.post('/api/events/:id/families', (req, res) => {
   };
 
   event.families.push(newFamily);
+  saveEventsToDisk();
+
   res.status(201).json({
     message: 'Registro exitoso. Se ha guardado en estado: Pendiente de asignación de mesa',
     family: newFamily,
@@ -217,23 +242,28 @@ app.post('/api/events/:id/families', (req, res) => {
 
 // DELETE a family
 app.delete('/api/events/:id/families/:familyId', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
 
   const idx = event.families.findIndex(f => f.id === req.params.familyId);
   if (idx === -1) return res.status(404).json({ error: 'Familia no encontrada' });
 
   event.families.splice(idx, 1);
+  saveEventsToDisk();
   res.json({ message: 'Familia eliminada correctamente' });
 });
 
 // POST add a table
 app.post('/api/events/:id/tables', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
 
   const { name, shape, capacity, x, y, color } = req.body;
   const tableCapacity = Number(capacity) || 8;
+
+  if (!event.tables) {
+    event.tables = [];
+  }
 
   const newTable: EventTable = {
     id: `tbl-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
@@ -247,12 +277,13 @@ app.post('/api/events/:id/tables', (req, res) => {
   };
 
   event.tables.push(newTable);
+  saveEventsToDisk();
   res.status(201).json(newTable);
 });
 
 // PUT update table (position, name, capacity, shape)
 app.put('/api/events/:id/tables/:tableId', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
 
   const table = event.tables.find(t => t.id === req.params.tableId);
@@ -265,12 +296,13 @@ app.put('/api/events/:id/tables/:tableId', (req, res) => {
   if (req.body.y !== undefined) table.y = Number(req.body.y);
   if (req.body.color !== undefined) table.color = req.body.color;
 
+  saveEventsToDisk();
   res.json(table);
 });
 
 // DELETE table
 app.delete('/api/events/:id/tables/:tableId', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
 
   // Unassign all families seated at this table back to pending
@@ -282,12 +314,13 @@ app.delete('/api/events/:id/tables/:tableId', (req, res) => {
   });
 
   event.tables = event.tables.filter(t => t.id !== req.params.tableId);
+  saveEventsToDisk();
   res.json({ message: 'Mesa eliminada y familias devueltas a pendientes' });
 });
 
 // POST assign family to table with capacity validation
 app.post('/api/events/:id/assign-table', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
 
   const { familyId, tableId } = req.body;
@@ -320,6 +353,7 @@ app.post('/api/events/:id/assign-table', (req, res) => {
   family.assignedTableId = table.id;
   family.status = 'assigned';
 
+  saveEventsToDisk();
   res.json({
     message: `Familia ${family.firstLastName} ${family.secondLastName} asignada exitosamente a ${table.name}`,
     family,
@@ -331,7 +365,7 @@ app.post('/api/events/:id/assign-table', (req, res) => {
 
 // POST unassign family from table
 app.post('/api/events/:id/unassign-table', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
 
   const { familyId } = req.body;
@@ -341,22 +375,25 @@ app.post('/api/events/:id/unassign-table', (req, res) => {
   family.assignedTableId = null;
   family.status = 'pending';
 
+  saveEventsToDisk();
   res.json({ message: 'Familia desasignada y devuelta al estado pendiente', family });
 });
 
 // PUT update decor elements
 app.put('/api/events/:id/decor', (req, res) => {
-  const event = eventsStore.find(e => e.id === req.params.id);
+  const event = findEvent(req.params.id);
   if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
 
   event.decorElements = req.body.decorElements || [];
+  saveEventsToDisk();
   res.json({ message: 'Decoración actualizada', decorElements: event.decorElements });
 });
 
-// POST Reset/Seed default events
-app.post('/api/seed', (req, res) => {
-  eventsStore = JSON.parse(JSON.stringify(INITIAL_EVENTS));
-  res.json({ message: 'Base de datos restaurada a datos demo', count: eventsStore.length });
+// POST Clear/Reset database to empty
+app.post('/api/clear', (req, res) => {
+  eventsStore = [];
+  saveEventsToDisk();
+  res.json({ message: 'Base de datos vaciada', count: 0 });
 });
 
 // ==========================================

@@ -44,7 +44,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newTime, setNewTime] = useState('18:00');
   const [newLocation, setNewLocation] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newPin, setNewPin] = useState('1234');
+  const [newPin, setNewPin] = useState('termine12.nx');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Copy status
@@ -68,7 +68,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     const success = onAuthenticate(pinInput);
     if (!success) {
-      setPinError('PIN incorrecto. (PIN por defecto: 1234)');
+      setPinError('Contraseña incorrecta. (Contraseña por defecto: termine12.nx)');
     } else {
       setPinError('');
     }
@@ -87,7 +87,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         time: newTime,
         location: newLocation.trim() || 'Salón Principal',
         description: newDescription.trim(),
-        adminPin: newPin.trim() || '1234',
+        adminPin: newPin.trim() || 'termine12.nx',
       });
       setIsCreateModalOpen(false);
       setNewTitle('');
@@ -140,19 +140,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
-                PIN de Seguridad
+                Contraseña de Administrador
               </label>
               <input
                 id="input-admin-pin"
                 type="password"
-                maxLength={8}
                 value={pinInput}
                 onChange={(e) => {
                   setPinInput(e.target.value);
                   setPinError('');
                 }}
-                placeholder="••••"
-                className="w-full text-center text-2xl tracking-[0.4em] font-mono py-3 px-4 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                placeholder="Ingresa la contraseña"
+                className="w-full text-center text-lg font-mono py-3 px-4 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                 autoFocus
               />
               {pinError && (
@@ -174,12 +173,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </form>
 
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>PIN predeterminado de prueba:</span>
+            <span>Contraseña predeterminada:</span>
             <button 
-              onClick={() => { setPinInput('1234'); }}
+              onClick={() => { setPinInput('termine12.nx'); }}
               className="font-mono font-semibold text-indigo-600 hover:underline bg-indigo-50 px-2 py-0.5 rounded"
             >
-              1234
+              termine12.nx
             </button>
           </div>
         </div>
@@ -215,15 +214,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            id="btn-reset-demo"
-            onClick={onResetDemo}
-            title="Restaurar datos demo de prueba"
-            className="px-3 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-1.5 shadow-xs"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Restaurar Demo</span>
-          </button>
           <button
             id="btn-new-event"
             onClick={() => setIsCreateModalOpen(true)}
@@ -292,11 +282,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               ) : (
                 filteredEvents.map((ev) => {
                   const isSelected = selectedEvent?.id === ev.id;
-                  const totalGuests = ev.families.reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0);
-                  const assignedGuests = ev.families
+                  const totalGuests = (ev.families || []).reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0);
+                  const assignedGuests = (ev.families || [])
                     .filter(f => f.status === 'assigned' && f.assignedTableId)
                     .reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0);
-                  const totalCapacity = ev.tables.reduce((acc, t) => acc + (Number(t.capacity) || 0), 0);
+                  const totalCapacity = (ev.tables || []).reduce((acc, t) => acc + (Number(t.capacity) || 0), 0);
 
                   return (
                     <div
@@ -427,24 +417,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-slate-100">
                   <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
                     <p className="text-[11px] font-medium text-slate-500">Familias Registradas</p>
-                    <p className="text-lg font-bold text-slate-800 mt-0.5">{selectedEvent.families.length}</p>
+                    <p className="text-lg font-bold text-slate-800 mt-0.5">{(selectedEvent.families || []).length}</p>
                   </div>
                   <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
                     <p className="text-[11px] font-medium text-slate-500">Total Personas</p>
                     <p className="text-lg font-bold text-indigo-600 mt-0.5">
-                      {selectedEvent.families.reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0)}
+                      {(selectedEvent.families || []).reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0)}
                     </p>
                   </div>
                   <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
                     <p className="text-[11px] font-medium text-slate-500">Asignadas a Mesa</p>
                     <p className="text-lg font-bold text-emerald-600 mt-0.5">
-                      {selectedEvent.families.filter(f => f.status === 'assigned' && f.assignedTableId).reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0)}
+                      {(selectedEvent.families || []).filter(f => f.status === 'assigned' && f.assignedTableId).reduce((acc, f) => acc + (Number(f.memberCount) || 0), 0)}
                     </p>
                   </div>
                   <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
                     <p className="text-[11px] font-medium text-slate-500">Capacidad Total</p>
                     <p className="text-lg font-bold text-slate-800 mt-0.5">
-                      {selectedEvent.tables.reduce((acc, t) => acc + (Number(t.capacity) || 0), 0)} sillas
+                      {(selectedEvent.tables || []).reduce((acc, t) => acc + (Number(t.capacity) || 0), 0)} sillas
                     </p>
                   </div>
                 </div>
@@ -601,10 +591,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
               <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-base font-bold text-slate-800">Ningún evento seleccionado</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Selecciona un evento de la columna izquierda o crea uno nuevo para ver sus URLs y gestionar su distribución.
+              <h3 className="text-base font-bold text-slate-800">No hay ningún evento activo</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto mb-4">
+                Comienza creando tu primer evento para obtener sus enlaces independientes de registro de invitados y distribución de mesas.
               </p>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md shadow-indigo-600/20 inline-flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Crear Primer Evento</span>
+              </button>
             </div>
           )}
 
@@ -665,10 +662,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">PIN de Seguridad (Admin)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Contraseña de Administrador (Opcional)</label>
                   <input
                     type="text"
-                    maxLength={6}
                     value={newPin}
                     onChange={(e) => setNewPin(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono text-slate-900"

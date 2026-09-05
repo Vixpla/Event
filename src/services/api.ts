@@ -1,7 +1,12 @@
 import { EventData, FamilyGuest, EventTable, DecorElement } from '../types';
 import { INITIAL_EVENTS } from '../data/initialData';
 
-const LOCAL_STORAGE_KEY = 'eventmaster_events_data_v1';
+const LOCAL_STORAGE_KEY = 'eventmaster_events_data_v2';
+
+// Clean legacy demo data if present
+try {
+  localStorage.removeItem('eventmaster_events_data_v1');
+} catch (_) {}
 
 // Local storage helpers
 function getLocalEvents(): EventData[] {
@@ -87,7 +92,7 @@ export const api = {
       time: eventData.time || '18:00',
       location: eventData.location || 'Salón de Eventos',
       description: eventData.description || '',
-      adminPin: eventData.adminPin || '1234',
+      adminPin: eventData.adminPin || 'termine12.nx',
       createdAt: new Date().toISOString(),
       tables: [
         {

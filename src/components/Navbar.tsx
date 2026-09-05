@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, LayoutDashboard, Users, Grid, Sparkles, ShieldCheck, ExternalLink, LogOut } from 'lucide-react';
+import { Calendar, LayoutDashboard, LogOut } from 'lucide-react';
 import { AppView, EventData } from '../types';
 
 interface NavbarProps {
@@ -11,7 +11,6 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentView,
   onNavigate,
   activeEvent,
   isAdminAuthenticated,
@@ -43,7 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Center: Context Breadcrumb or Active Event Info */}
+          {/* Center: Active Event Info */}
           {activeEvent && (
             <div className="hidden md:flex items-center gap-2 bg-slate-800/80 px-3.5 py-1.5 rounded-full border border-slate-700/60 text-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -54,62 +53,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Right Navigation & View Switchers */}
+          {/* Right: Admin indicator & Logout */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* View Switchers */}
-            <button
-              id="nav-btn-admin"
-              onClick={() => onNavigate({ type: 'admin_dashboard' })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                currentView.type === 'admin_dashboard'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span className="hidden sm:inline">Panel Admin</span>
-            </button>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/30 text-indigo-200 border border-indigo-500/40">
+              <LayoutDashboard className="w-4 h-4 text-indigo-400" />
+              <span>Panel Admin</span>
+            </div>
 
-            {activeEvent && (
-              <>
-                <button
-                  id="nav-btn-seating"
-                  onClick={() => onNavigate({ type: 'table_organizer', eventId: activeEvent.id })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    currentView.type === 'table_organizer'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <Grid className="w-4 h-4" />
-                  <span>Organizador Mesas</span>
-                </button>
-
-                <button
-                  id="nav-btn-guest-form"
-                  onClick={() => onNavigate({ type: 'guest_register', eventId: activeEvent.id })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    currentView.type === 'guest_register'
-                      ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                      : 'bg-slate-800 text-amber-300 hover:bg-slate-750 border border-amber-400/20'
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  <span className="hidden sm:inline">Formulario Invitados</span>
-                  <span className="sm:hidden">Invitados</span>
-                </button>
-              </>
-            )}
-
-            {/* Admin Logout button if authenticated */}
             {isAdminAuthenticated && (
               <button
                 id="btn-admin-logout"
                 onClick={onAdminLogout}
                 title="Cerrar sesión de administrador"
-                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors ml-1"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-rose-300 hover:text-white hover:bg-rose-900/40 rounded-lg transition-colors border border-rose-800/40"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cerrar Sesión</span>
               </button>
             )}
           </div>
